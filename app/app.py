@@ -468,7 +468,7 @@ elif selected_page == 'Categorical CPI':
             "CP11": "Restaurants & Hotels"
         }
 
-        df_granular_cpi
+
         # Add readable category name
         df_granular_cpi['Category'] = df_granular_cpi['COICOP_1999'].map(coicop_labels).fillna(
             df_granular_cpi['COICOP_1999'])
