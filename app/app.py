@@ -17,7 +17,7 @@ def load_data(file_path):
 
 df_aggregate_cpi = load_data('data/imf_cpi_all_countries_quarterly_data.csv')
 df_granular_cpi = load_data('data/imf_cpi_selected_categories_quarterly_data.csv')
-df_nha_indicators = load_data('data/NHA_indicators.csv')
+df_nha_indicators = load_data('data/NHA_indicators_PPP.csv')
 
 st.title('Welcome to Nomad Compass :globe_with_meridians:')
 st.header('Economic and Health Data Insights')
