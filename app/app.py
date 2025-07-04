@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
-
+import plotly
+import plotly.express as px
 # Using st.cache_data to cache the data loading, improving performance
 @st.cache_data
 def load_data(file_path):
@@ -366,3 +367,45 @@ if selected_page == 'Home':
             st.warning("NHA Indicators data not loaded.")
 elif selected_page == 'Aggregate CPI':
     st.header(f"Aggregate CPI Data")
+    st.header("Aggregate CPI Data")
+
+    if df_aggregate_cpi.empty:
+        st.warning("Aggregate CPI data not loaded.")
+    else:
+        # Extract unique countries for selection
+        countries = df_aggregate_cpi['Country'].unique()
+        selected_countries = st.multiselect(
+            "Select one or more countries to visualize CPI over time:",
+            options=sorted(countries),
+            default=['ABW']  # default selection, adjust as you like
+        )
+
+        if selected_countries:
+            # Filter dataframe for selected countries
+            df_filtered = df_aggregate_cpi[df_aggregate_cpi['Country'].isin(selected_countries)].copy()
+
+            # Parse 'Quarter' column to datetime for proper plotting
+            df_filtered['Year'] = df_filtered['Quarter'].str.extract(r'(\d{4})').astype(int)
+            df_filtered['Q_Num'] = df_filtered['Quarter'].str.extract(r'Q([1-4])').astype(int)
+            df_filtered['Time'] = pd.to_datetime(
+                df_filtered['Year'].astype(str) + '-Q' + df_filtered['Q_Num'].astype(str))
+
+            # Sort by time for each country
+            df_filtered = df_filtered.sort_values(['Country', 'Time'])
+
+            # Plotly line chart with multiple countries
+            fig = px.line(
+                df_filtered,
+                x='Time',
+                y='Value',
+                color='Country',
+                markers=True,
+                labels={'Time': 'Quarter', 'Value': 'CPI Value'},
+                title='Aggregate CPI Over Time by Country',
+                template='plotly_white'
+            )
+            fig.update_layout(hovermode='x unified', title_font_size=20)
+            st.plotly_chart(fig, use_container_width=True)
+
+        else:
+            st.info("Please select at least one country to display the chart.")
