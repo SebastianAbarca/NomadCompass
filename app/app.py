@@ -263,28 +263,86 @@ if selected_page == 'Home':
             st.markdown("Health services focused on disease prevention, such as screenings, vaccinations, and health education to reduce the risk or severity of illness.")
             with st.expander("More information on Preventive Care", expanded=False):
                 st.markdown("""
-                        <!-- Fill in with details about Preventive Care here -->
+                        Preventive care refers to medical services and interventions aimed at preventing the onset of illness or detecting health issues at an early stage, before symptoms develop or conditions worsen.
+
+                        This includes:
+                        
+                        - **Screenings and check-ups** (e.g., blood pressure checks, cholesterol tests, cancer screenings)
+                        - **Health education and counseling** (e.g., lifestyle advice on smoking cessation, nutrition, and exercise)
+                        - **Routine vaccinations** to prevent infectious diseases
+                        - **Prenatal and well-child visits**
+                        
+                        Preventive care reduces long-term healthcare costs by avoiding more serious and expensive treatments later. It also improves quality of life and increases life expectancy by catching conditions early or avoiding them altogether.
+                        
+                        Investment in preventive services is often considered a high-value strategy for strengthening public health systems and reducing health disparities.
+
                         """)
 
             st.markdown("**Immunization Programmes:**")
             st.markdown("Organized efforts to provide vaccinations to populations, aiming to prevent infectious diseases and protect public health.")
             with st.expander("More information on Immunization Programmes", expanded=False):
                 st.markdown("""
-                        <!-- Fill in with details about Immunization Programmes here -->
+                        Immunization programmes are organized efforts by governments, health organizations, and communities to deliver vaccines to the population, 
+                        particularly children and vulnerable groups.
+
+                        These programmes aim to:
+                        
+                        - **Prevent infectious diseases** such as measles, polio, diphtheria, and hepatitis
+                        - **Achieve herd immunity**, reducing the overall presence of disease in the population
+                        - **Improve child survival rates** and reduce the burden of disease
+                        - **Prevent disease outbreaks and pandemics**
+                        
+                        Key components of immunization programmes include:
+                        
+                        - **Routine childhood immunizations**
+                        - **Supplementary immunization activities** during outbreaks
+                        - **Cold chain systems** to keep vaccines safe and effective during transport and storage
+                        - **Public education and outreach** to increase awareness and vaccine uptake
+                        
+                        Immunization is one of the most cost-effective health interventions available and is essential for achieving universal 
+                        health coverage and global health security.
                         """)
 
             st.markdown("**Early Disease Detection Programmes:**")
             st.markdown("Initiatives designed to identify diseases at an early stage, improving treatment outcomes and reducing healthcare costs.")
             with st.expander("More information on Early Disease Detection Programmes", expanded=False):
                 st.markdown("""
-                        <!-- Fill in with details about Early Disease Detection Programmes here -->
+                        Early disease detection programmes are public health initiatives focused on identifying illnesses at an early, often asymptomatic stage.
+
+                        Their goals include:
+                        
+                        - **Improving treatment outcomes** by catching diseases before they progress
+                        - **Reducing long-term healthcare costs**
+                        - **Increasing survival rates** for conditions like cancer, diabetes, and cardiovascular disease
+                        
+                        Common methods include:
+                        
+                        - Routine screenings (e.g., mammograms, blood pressure checks)
+                        - Genetic testing for inherited conditions
+                        - Health risk assessments based on lifestyle or family history
+                        
+                        These programmes are essential for shifting healthcare from reactive to proactive, enabling earlier interventions and better quality of life.
                         """)
 
             st.markdown("**Healthy Condition Monitoring Programmes:**")
             st.markdown("Ongoing monitoring services to manage chronic conditions and maintain health, including regular check-ups and health assessments.")
             with st.expander("More information on Healthy Condition Monitoring Programmes", expanded=False):
                 st.markdown("""
-                        <!-- Fill in with details about Healthy Condition Monitoring Programmes here -->
+                        Healthy condition monitoring programmes are designed to track individuals’ health status over time, especially for those with chronic conditions or at risk of developing them.
+
+                        Key objectives include:
+                        
+                        - **Maintaining stable health** by catching early signs of deterioration
+                        - **Personalized care** through regular check-ups and health metrics
+                        - **Empowering patients** to take an active role in managing their health
+                        
+                        These programmes often involve:
+                        
+                        - Routine medical visits and laboratory tests
+                        - Use of wearable technology or remote monitoring devices
+                        - Data collection on vital signs, medication adherence, and symptoms
+                        
+                        By continuously monitoring health, these programmes help prevent complications, reduce hospitalizations, and support long-term well-being.
                         """)
 
             st.markdown("**Preparing for Disaster and Emergency Response Programmes:**")
@@ -292,7 +350,17 @@ if selected_page == 'Home':
             with st.expander("More information on Preparing for Disaster and Emergency Response Programmes",
                              expanded=False):
                 st.markdown("""
-                        <!-- Fill in with details about Preparing for Disaster and Emergency Response Programmes here -->
+                        Preparing for disaster and emergency response programmes ensures that health systems are equipped to handle sudden and large-scale crises, such as natural disasters, pandemics, or mass casualty events.
+
+                        Key components include:
+                        
+                        - **Emergency preparedness planning** at national and local levels
+                        - **Training healthcare personnel** for crisis scenarios
+                        - **Stockpiling and distributing critical medical supplies**
+                        - **Establishing early warning systems** and communication protocols
+                        - **Coordinating with international and humanitarian organizations**
+                        
+                        These programmes are essential for minimizing the impact of emergencies on population health and ensuring timely and effective medical responses when systems are under stress.
                         """)
     else:
             st.warning("NHA Indicators data not loaded.")
