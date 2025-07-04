@@ -28,6 +28,7 @@ df_aggregate_cpi = load_data('data/imf_cpi_all_countries_quarterly_data.csv')
 df_granular_cpi = load_data('data/imf_cpi_selected_categories_quarterly_data.csv')
 df_nha_indicators = load_data('data/NHA_indicators_PPP.csv')
 df_aggregate_cpi['COUNTRY_NAME'] = df_aggregate_cpi['COUNTRY'].apply(get_country_name)
+df_granular_cpi['COUNTRY_NAME'] = df_granular_cpi['COUNTRY'].apply(get_country_name)
 
 st.title('Welcome to Nomad Compass :globe_with_meridians:')
 st.header('Economic and Health Data Insights')
@@ -451,3 +452,112 @@ elif selected_page == 'Aggregate CPI':
 
         with st.expander("See Full Country Stability Table"):
             st.dataframe(stability_df.set_index('COUNTRY_NAME').round(2))
+elif selected_page == 'Categorical CPI':
+    st.header("Categorical CPI Data")
+
+    if df_granular_cpi.empty:
+        st.warning("Granular CPI data not loaded.")
+    else:
+        # Map COICOP codes to readable names (expand as needed)
+        coicop_labels = {
+            "CP01": "Food & Non-Alcoholic Beverages",
+            "CP04": "Housing",
+            "CP06": "Health",
+            "CP07": "Transport",
+            "CP09": "Recreation & Culture",
+            "CP11": "Restaurants & Hotels"
+        }
+
+        df_granular_cpi
+        # Add readable category name
+        df_granular_cpi['Category'] = df_granular_cpi['COICOP_1999'].map(coicop_labels).fillna(
+            df_granular_cpi['COICOP_1999'])
+
+        # Extract year and quarter, convert to datetime
+        df_granular_cpi['Year'] = df_granular_cpi['TIME_PERIOD'].str.extract(r'(\d{4})').astype(int)
+        df_granular_cpi['Q_Num'] = df_granular_cpi['TIME_PERIOD'].str.extract(r'Q([1-4])').astype(int)
+        df_granular_cpi['Time'] = pd.to_datetime(
+            df_granular_cpi['Year'].astype(str) + '-Q' + df_granular_cpi['Q_Num'].astype(str))
+
+        # Sort for plotting
+        df_granular_cpi = df_granular_cpi.sort_values(['COUNTRY_NAME', 'Time'])
+
+        # Country selection
+        selected_countries = st.multiselect(
+            "Select up to 2 countries to compare CPI breakdown:",
+            sorted(df_granular_cpi['COUNTRY_NAME'].unique()),
+            default=["United States"],  # adjust default as needed
+            max_selections=2
+        )
+
+        if selected_countries:
+            df_compare = df_granular_cpi[df_granular_cpi['COUNTRY_NAME'].isin(selected_countries)].copy()
+
+            # Group and sum CPI values per Time, Country, Category
+            grouped = (
+                df_compare.groupby(['Time', 'COUNTRY_NAME', 'Category'])['OBS_VALUE']
+                .sum()
+                .reset_index()
+            )
+
+            # Faceted stacked bar chart
+            fig = px.bar(
+                grouped,
+                x='Time',
+                y='OBS_VALUE',
+                color='Category',
+                facet_col='COUNTRY_NAME',
+                labels={'OBS_VALUE': 'CPI (PPP)', 'Time': 'Quarter'},
+                title="CPI Breakdown by Category (Comparison)",
+                template='plotly_white'
+            )
+
+            fig.update_layout(
+                barmode='stack',
+                title_font_size=20,
+                legend_title_text='Category',
+                hovermode='x unified'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            with st.expander("View Raw CPI Comparison Table"):
+                if len(selected_countries) == 1:
+                    country = selected_countries[0]
+                    pivot = grouped[grouped['COUNTRY_NAME'] == country].pivot_table(
+                        index='Time',
+                        columns='Category',
+                        values='OBS_VALUE'
+                    ).round(2)
+                    st.markdown(f"**{country}**")
+                    st.dataframe(pivot, use_container_width=True)
+
+                elif len(selected_countries) == 2:
+                    country_1 = selected_countries[0]
+                    country_2 = selected_countries[1]
+
+                    pivot_1 = grouped[grouped['COUNTRY_NAME'] == country_1].pivot_table(
+                        index='Time',
+                        columns='Category',
+                        values='OBS_VALUE'
+                    ).round(2)
+
+                    pivot_2 = grouped[grouped['COUNTRY_NAME'] == country_2].pivot_table(
+                        index='Time',
+                        columns='Category',
+                        values='OBS_VALUE'
+                    ).round(2)
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**{country_1}**")
+                        st.dataframe(pivot_1, use_container_width=True)
+
+                    with col2:
+                        st.markdown(f"**{country_2}**")
+                        st.dataframe(pivot_2, use_container_width=True)
+
+                    st.markdown(f"**Note: both of these are in PPP")
+
+                else:
+                    st.info("Please select at least one country to view the data.")
