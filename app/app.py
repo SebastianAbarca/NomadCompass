@@ -454,7 +454,6 @@ elif selected_page == 'Aggregate CPI':
             st.dataframe(stability_df.set_index('COUNTRY_NAME').round(2))
 elif selected_page == 'Categorical CPI':
     st.header("Categorical CPI Data")
-
     if df_granular_cpi.empty:
         st.warning("Granular CPI data not loaded.")
     else:
