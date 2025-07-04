@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import plotly
 import plotly.express as px
+import pycountry
 # Using st.cache_data to cache the data loading, improving performance
 @st.cache_data
 def load_data(file_path):
@@ -16,9 +17,17 @@ def load_data(file_path):
         st.error(f"An error occurred loading '{os.path.basename(file_path)}': {e}")
         return pd.DataFrame() # Return empty DataFrame on error
 
+def get_country_name(alpha_3_code):
+    try:
+        return pycountry.countries.get(alpha_3=alpha_3_code).name
+    except:
+        return alpha_3_code  # fallback to code if not found
+
+
 df_aggregate_cpi = load_data('data/imf_cpi_all_countries_quarterly_data.csv')
 df_granular_cpi = load_data('data/imf_cpi_selected_categories_quarterly_data.csv')
 df_nha_indicators = load_data('data/NHA_indicators_PPP.csv')
+df_aggregate_cpi['COUNTRY_NAME'] = df_aggregate_cpi['COUNTRY'].apply(get_country_name)
 
 st.title('Welcome to Nomad Compass :globe_with_meridians:')
 st.header('Economic and Health Data Insights')
@@ -371,40 +380,74 @@ elif selected_page == 'Aggregate CPI':
     if df_aggregate_cpi.empty:
         st.warning("Aggregate CPI data not loaded.")
     else:
+
         # Extract unique countries for selection
-        countries = df_aggregate_cpi['Country'].unique()
+        countries = df_aggregate_cpi['COUNTRY_NAME'].unique()
         selected_countries = st.multiselect(
             "Select one or more countries to visualize CPI over time:",
             options=sorted(countries),
-            default=['ABW']  # default selection, adjust as you like
+            default=['Aruba']  # adjust default as needed
         )
 
+        # Prepare for both plotting and stability
+        df_cpi = df_aggregate_cpi.copy()
+        df_cpi['Year'] = df_cpi['TIME_PERIOD'].str.extract(r'(\d{4})').astype(int)
+        df_cpi['Q_Num'] = df_cpi['TIME_PERIOD'].str.extract(r'Q([1-4])').astype(int)
+        df_cpi['Time'] = pd.to_datetime(df_cpi['Year'].astype(str) + '-Q' + df_cpi['Q_Num'].astype(str))
+        df_cpi = df_cpi.sort_values(['COUNTRY_NAME', 'Time'])
+
+        # Calculate YoY % change (Q1 2020 vs Q1 2019, etc.)
+        df_cpi['YoY_change'] = df_cpi.groupby('COUNTRY_NAME')['OBS_VALUE'].pct_change(periods=4) * 100
+
+        # ==== Visualization of CPI Over Time ====
         if selected_countries:
-            # Filter dataframe for selected countries
-            df_filtered = df_aggregate_cpi[df_aggregate_cpi['Country'].isin(selected_countries)].copy()
+            df_filtered = df_cpi[df_cpi['COUNTRY_NAME'].isin(selected_countries)].copy()
 
-            # Parse 'Quarter' column to datetime for proper plotting
-            df_filtered['Year'] = df_filtered['Quarter'].str.extract(r'(\d{4})').astype(int)
-            df_filtered['Q_Num'] = df_filtered['Quarter'].str.extract(r'Q([1-4])').astype(int)
-            df_filtered['Time'] = pd.to_datetime(
-                df_filtered['Year'].astype(str) + '-Q' + df_filtered['Q_Num'].astype(str))
-
-            # Sort by time for each country
-            df_filtered = df_filtered.sort_values(['Country', 'Time'])
-
-            # Plotly line chart with multiple countries
             fig = px.line(
                 df_filtered,
                 x='Time',
-                y='Value',
-                color='Country',
+                y='OBS_VALUE',
+                color='COUNTRY_NAME',
                 markers=True,
-                labels={'Time': 'Quarter', 'Value': 'CPI Value'},
+                labels={'Time': 'Quarter', 'OBS_VALUE': 'CPI Value'},
                 title='Aggregate CPI Over Time by Country',
                 template='plotly_white'
             )
             fig.update_layout(hovermode='x unified', title_font_size=20)
             st.plotly_chart(fig, use_container_width=True)
-
         else:
             st.info("Please select at least one country to display the chart.")
+
+        # ==== Stability Analysis ====
+        st.subheader("Top 10 Most Stable Countries (Lowest CPI Volatility)")
+
+        stability_df = (
+            df_cpi.groupby('COUNTRY_NAME')['YoY_change']
+            .std()
+            .dropna()
+            .sort_values()
+            .reset_index()
+            .rename(columns={'YoY_change': 'YoY_StdDev'})
+        )
+
+        top_stable = stability_df.head(10)
+
+        col1, col2 = st.columns([4, 3]) ##DONT CHANGE RATIO
+        with col1:
+            fig_stab = px.bar(
+                top_stable,
+                x='COUNTRY_NAME',
+                y='YoY_StdDev',
+                text=top_stable['YoY_StdDev'].round(2),
+                labels={'YoY_StdDev': 'Std. Dev of YoY % Change'},
+                title='Top 10 CPI Stable Countries',
+                template='plotly_white'
+            )
+            fig_stab.update_traces(marker_color='seagreen')
+            st.plotly_chart(fig_stab, use_container_width=True)  # <--- make sure this is here
+
+        with col2:
+            st.dataframe(top_stable.set_index('COUNTRY_NAME').round(2), use_container_width=True)  # <--- this helps too
+
+        with st.expander("See Full Country Stability Table"):
+            st.dataframe(stability_df.set_index('COUNTRY_NAME').round(2))
