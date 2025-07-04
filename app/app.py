@@ -367,7 +367,6 @@ if selected_page == 'Home':
             st.warning("NHA Indicators data not loaded.")
 elif selected_page == 'Aggregate CPI':
     st.header(f"Aggregate CPI Data")
-    st.header("Aggregate CPI Data")
 
     if df_aggregate_cpi.empty:
         st.warning("Aggregate CPI data not loaded.")
