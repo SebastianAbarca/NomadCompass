@@ -535,22 +535,36 @@ elif selected_page == 'Categorical CPI':
 
             # ==== YoY % Change Bar Chart ====
             st.subheader("Year-over-Year Change by Category")
+
+            # 1. Calculate YoY % change (4 quarters back)
             df_compare['YoY_pct'] = df_compare.groupby(['COUNTRY_NAME', 'Category'])['OBS_VALUE'].pct_change(
                 periods=4) * 100
-            yoy_latest = df_compare['Time'].max()
-            yoy_df = df_compare[df_compare['Time'] == yoy_latest].dropna(subset=['YoY_pct'])
 
-            fig_yoy = px.bar(
-                yoy_df,
-                x='Category',
-                y='YoY_pct',
-                color='COUNTRY_NAME',
-                barmode='group',
-                title=f"YoY % Change in CPI by Category ({yoy_latest.strftime('%Y-Q%q')})",
-                labels={'YoY_pct': 'YoY % Change'},
-                template='plotly_white'
-            )
-            st.plotly_chart(fig_yoy, use_container_width=True)
+            # 2. Get latest quarter shared across both countries
+            latest_time = df_compare['Time'].max()
+
+            # 3. Filter to that quarter and drop rows without YoY %
+            yoy_df = df_compare[df_compare['Time'] == latest_time].dropna(subset=['YoY_pct'])
+
+            # 4. Optional: apply category filter if you've allowed users to select categories
+            # e.g., filtered_yoy_df = yoy_df[yoy_df['Category'].isin(selected_categories)]
+
+            # 5. Plot grouped bar chart
+            if not yoy_df.empty:
+                fig_yoy = px.bar(
+                    yoy_df,
+                    x='Category',
+                    y='YoY_pct',
+                    color='COUNTRY_NAME',
+                    barmode='group',
+                    title=f"YoY % Change in CPI by Category ({latest_time.strftime('%Y-Q%q')})",
+                    labels={'YoY_pct': 'YoY % Change'},
+                    template='plotly_white'
+                )
+                fig_yoy.update_layout(legend_title_text="Country")
+                st.plotly_chart(fig_yoy, use_container_width=True)
+            else:
+                st.info("No YoY data available for the latest quarter and selected categories.")
 
             # ==== Heatmap (Single Country) ====
             st.subheader("CPI Heatmap")
