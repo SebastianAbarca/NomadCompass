@@ -29,6 +29,7 @@ df_granular_cpi = load_data('data/imf_cpi_selected_categories_quarterly_data.csv
 df_nha_indicators = load_data('data/NHA_indicators_PPP.csv')
 df_aggregate_cpi['COUNTRY_NAME'] = df_aggregate_cpi['COUNTRY'].apply(get_country_name)
 df_granular_cpi['COUNTRY_NAME'] = df_granular_cpi['COUNTRY'].apply(get_country_name)
+df_population = load_data('data/world_population_data.csv')
 
 st.title('Welcome to Nomad Compass :globe_with_meridians:')
 st.header('Economic and Health Data Insights')
@@ -376,82 +377,167 @@ if selected_page == 'Home':
     else:
             st.warning("NHA Indicators data not loaded.")
 elif selected_page == 'Aggregate CPI':
-    st.header(f"Aggregate CPI Data")
+            st.header("Aggregate CPI Data")
 
-    if df_aggregate_cpi.empty:
-        st.warning("Aggregate CPI data not loaded.")
-    else:
+            if df_aggregate_cpi.empty:
+                st.warning("Aggregate CPI data not loaded.")
+            else:
+                # --- Data Preprocessing for CPI ---
+                df_cpi = df_aggregate_cpi.copy()
 
-        # Extract unique countries for selection
-        countries = df_aggregate_cpi['COUNTRY_NAME'].unique()
-        selected_countries = st.multiselect(
-            "Select one or more countries to visualize CPI over time:",
-            options=sorted(countries),
-            default=['Aruba']  # adjust default as needed
-        )
+                # Safely convert 'TIME_PERIOD' to PeriodIndex for proper quarterly handling
+                try:
+                    # Assuming 'TIME_PERIOD' is directly like '2020Q1', '2020Q2', etc.
+                    df_cpi['TIME_PERIOD_PERIOD'] = pd.PeriodIndex(df_cpi['TIME_PERIOD'], freq='Q')
+                except Exception as e:
+                    st.error(
+                        f"Error converting CPI TIME_PERIOD to a PeriodIndex: {e}. Please ensure it's in 'YYYYQn' format (e.g., '2020Q1').")
 
-        # Prepare for both plotting and stability
-        df_cpi = df_aggregate_cpi.copy()
-        df_cpi['Year'] = df_cpi['TIME_PERIOD'].str.extract(r'(\d{4})').astype(int)
-        df_cpi['Q_Num'] = df_cpi['TIME_PERIOD'].str.extract(r'Q([1-4])').astype(int)
-        df_cpi['Time'] = pd.to_datetime(df_cpi['Year'].astype(str) + '-Q' + df_cpi['Q_Num'].astype(str))
-        df_cpi = df_cpi.sort_values(['COUNTRY_NAME', 'Time'])
+                # Extract Year and Quarter Number using the PeriodIndex accessor
+                df_cpi['Year'] = df_cpi['TIME_PERIOD_PERIOD'].dt.year
+                df_cpi['Q_Num'] = df_cpi['TIME_PERIOD_PERIOD'].dt.quarter
 
-        # Calculate YoY % change (Q1 2020 vs Q1 2019, etc.)
-        df_cpi['YoY_change'] = df_cpi.groupby('COUNTRY_NAME')['OBS_VALUE'].pct_change(periods=4) * 100
+                # Convert PeriodIndex to Timestamp for Plotly (Plotly prefers datetime objects)
+                df_cpi['Time'] = df_cpi['TIME_PERIOD_PERIOD'].dt.to_timestamp()
+                df_cpi = df_cpi.sort_values(['COUNTRY_NAME', 'Time'])
 
-        # ==== Visualization of CPI Over Time ====
-        if selected_countries:
-            df_filtered = df_cpi[df_cpi['COUNTRY_NAME'].isin(selected_countries)].copy()
+                # Calculate Year-over-Year (YoY) % change
+                # Ensure data is sorted for correct pct_change calculation within each country group
+                df_cpi['YoY_change'] = df_cpi.groupby('COUNTRY_NAME')['OBS_VALUE'].pct_change(periods=4) * 100
 
-            fig = px.line(
-                df_filtered,
-                x='Time',
-                y='OBS_VALUE',
-                color='COUNTRY_NAME',
-                markers=True,
-                labels={'Time': 'Quarter', 'OBS_VALUE': 'CPI Value'},
-                title='Aggregate CPI Over Time by Country',
-                template='plotly_white'
-            )
-            fig.update_layout(hovermode='x unified', title_font_size=20)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Please select at least one country to display the chart.")
+                # --- CPI Over Time Visualization ---
+                st.subheader("CPI Over Time by Country")
+                countries = df_cpi['COUNTRY_NAME'].unique()
+                selected_countries = st.multiselect(
+                    "Select one or more countries to visualize CPI over time:",
+                    options=sorted(countries),
+                    default=['Aruba']
+                )
 
-        # ==== Stability Analysis ====
-        st.subheader("Top 10 Most Stable Countries (Lowest CPI Volatility)")
+                if selected_countries:
+                    df_filtered_plot = df_cpi[df_cpi['COUNTRY_NAME'].isin(selected_countries)].copy()
 
-        stability_df = (
-            df_cpi.groupby('COUNTRY_NAME')['YoY_change']
-            .std()
-            .dropna()
-            .sort_values()
-            .reset_index()
-            .rename(columns={'YoY_change': 'YoY_StdDev'})
-        )
+                    fig_cpi_time = px.line(
+                        df_filtered_plot,
+                        x='Time',
+                        y='OBS_VALUE',
+                        color='COUNTRY_NAME',
+                        markers=True,
+                        labels={'Time': 'Quarter', 'OBS_VALUE': 'CPI Value'},
+                        title='Aggregate CPI Over Time by Country',
+                        template='plotly_white'
+                    )
+                    fig_cpi_time.update_layout(hovermode='x unified', title_font_size=20)
+                    st.plotly_chart(fig_cpi_time, use_container_width=True)
+                else:
+                    st.info("Please select at least one country to display the CPI over time chart.")
 
-        top_stable = stability_df.head(10)
+                # --- CPI Stability Analysis ---
+                st.subheader("Top 10 Most Stable Countries (Lowest CPI Volatility)")
 
-        col1, col2 = st.columns([4, 3]) ##DONT CHANGE RATIO
-        with col1:
-            fig_stab = px.bar(
-                top_stable,
-                x='COUNTRY_NAME',
-                y='YoY_StdDev',
-                text=top_stable['YoY_StdDev'].round(2),
-                labels={'YoY_StdDev': 'Std. Dev of YoY % Change'},
-                title='Top 10 CPI Stable Countries',
-                template='plotly_white'
-            )
-            fig_stab.update_traces(marker_color='seagreen')
-            st.plotly_chart(fig_stab, use_container_width=True)  # <--- make sure this is here
+                # --- Prepare Population Data for Merging ---
+                df_pop_processed = df_population.copy()
+                if 'Country/Territory' in df_pop_processed.columns:
+                    df_pop_processed.rename(columns={'Country/Territory': 'COUNTRY_NAME'}, inplace=True)
+                else:
+                    st.warning("Population data is missing 'Country/Territory' column. Cannot merge effectively.")
+                    df_pop_processed = pd.DataFrame()
 
-        with col2:
-            st.dataframe(top_stable.set_index('COUNTRY_NAME').round(2), use_container_width=True)  # <--- this helps too
+                if not df_pop_processed.empty and 'Year' in df_pop_processed.columns and 'Population' in df_pop_processed.columns:
+                    df_pop_for_merge = df_pop_processed[['COUNTRY_NAME', 'Year', 'Population']].copy()
 
-        with st.expander("See Full Country Stability Table"):
-            st.dataframe(stability_df.set_index('COUNTRY_NAME').round(2))
+                    # --- Merge CPI data with Population data ---
+                    df_cpi_with_population = pd.merge(
+                        df_cpi,
+                        df_pop_for_merge,
+                        on=['COUNTRY_NAME', 'Year'],
+                        how='left'
+                    )
+                else:
+                    st.warning(
+                        "Population data is not in the expected format or is empty. Stability analysis will proceed without population filtering.")
+                    df_cpi_with_population = df_cpi.copy()
+
+                # --- Population Filtering for Stability Analysis ---
+                filtered_cpi_df = df_cpi_with_population.copy()
+
+                if 'Population' in filtered_cpi_df.columns and not filtered_cpi_df['Population'].isnull().all():
+                    min_pop = int(filtered_cpi_df['Population'].min())
+                    max_pop = int(filtered_cpi_df['Population'].max())
+
+                    min_pop_M = min_pop // 1_000_000
+                    max_pop_M = (max_pop + 999_999) // 1_000_000
+
+                    population_range_M = st.slider(
+                        'Select Population Range (in millions) for Stability Analysis:',
+                        min_value=min_pop_M,
+                        max_value=max_pop_M,
+                        value=(min_pop_M, max_pop_M),
+                        step=10,
+                        format='%dM'
+                    )
+
+                    filtered_cpi_df = filtered_cpi_df[
+                        (filtered_cpi_df['Population'] >= population_range_M[0] * 1_000_000) &
+                        (filtered_cpi_df['Population'] <= population_range_M[1] * 1_000_000)
+                        ].copy()
+                    st.info(
+                        f"Filtering countries with population between {population_range_M[0]}M and {population_range_M[1]}M.")
+                else:
+                    st.info(
+                        "Population data not available or incomplete for filtering. Displaying stability for all countries with CPI data.")
+
+                # --- Calculate Stability ---
+                if 'YoY_change' not in filtered_cpi_df.columns or filtered_cpi_df['YoY_change'].isnull().all():
+                    st.warning(
+                        "YoY_change data not available or is all null after filtering. Cannot calculate stability.")
+                    stability_df = pd.DataFrame()
+                else:
+                    stability_df = (
+                        filtered_cpi_df.groupby('COUNTRY_NAME')['YoY_change']
+                        .std()
+                        .dropna()
+                        .sort_values()
+                        .reset_index()
+                        .rename(columns={'YoY_change': 'YoY_StdDev'})
+                    )
+
+                # --- Display Stability Results ---
+                if not stability_df.empty:
+                    top_stable = stability_df.head(10)
+
+                    col1, col2 = st.columns([4, 3])
+                    with col1:
+                        fig_stab = px.bar(
+                            top_stable,
+                            x='COUNTRY_NAME',
+                            y='YoY_StdDev',
+                            text=top_stable['YoY_StdDev'].round(2),
+                            labels={'YoY_StdDev': 'Std. Dev of YoY % Change', 'COUNTRY_NAME': 'Country'},
+                            title='Top 10 CPI Stable Countries',
+                            template='plotly_white'
+                        )
+                        fig_stab.update_traces(marker_color='seagreen')
+                        fig_stab.update_layout(xaxis_title_text='')
+                        st.plotly_chart(fig_stab, use_container_width=True)
+
+                    with col2:
+                        st.write("### Stability Data Table")
+                        st.dataframe(top_stable.set_index('COUNTRY_NAME').round(2), use_container_width=True)
+                else:
+                    st.info("Not enough data to calculate CPI stability for the selected population range.")
+
+                # --- Explore Individual Country CPI ---
+                all_countries_merged = sorted(df_cpi_with_population['COUNTRY_NAME'].unique())
+                selected_country_agg_explore = st.selectbox('Select a Country to view all its CPI data:',
+                                                            all_countries_merged)
+
+                if selected_country_agg_explore:
+                    country_df_agg_explore = df_cpi_with_population[
+                        df_cpi_with_population['COUNTRY_NAME'] == selected_country_agg_explore
+                        ].copy()
+                    st.write(f"### Detailed CPI Data for {selected_country_agg_explore}")
+                    st.dataframe(country_df_agg_explore.round(2), use_container_width=True)
 elif selected_page == 'Categorical CPI':
     st.header("Categorical CPI Data")
     if df_granular_cpi.empty:
@@ -609,3 +695,183 @@ elif selected_page == 'Categorical CPI':
                         st.dataframe(pivot2, use_container_width=True)
                 else:
                     st.info("Please select at least one country to view the data.")
+elif selected_page == 'NHA Indicators':
+    st.header('National Health Accounts Indicators')
+    st.write("This section displays National Health Accounts indicators and their trends.")
+
+    if not df_nha_indicators.empty:
+        # Filter out rows with NaN in 'Value' for display and selectors
+        df_nha_display = df_nha_indicators.dropna(subset=['Value']).copy()
+
+        st.subheader("Raw Data Sample (Non-Null Values)")
+        st.dataframe(df_nha_display.head())  # Display head of filtered data
+
+        # Get unique indicators and years from the filtered DataFrame for selection
+        nha_indicators_list = sorted(df_nha_display['Indicators'].unique())
+        nha_years_list = sorted(df_nha_display['Year'].dropna().unique().tolist())
+        all_nha_countries = sorted(df_nha_display['Countries'].unique())
+
+        # --- Visualization 1: Line Chart - Indicator Trend for Selected Countries ---
+        st.subheader("1. Health Expenditure Trend for Selected Countries")
+
+        selected_nha_indicator_line = st.selectbox(
+            'Select Indicator for Line Chart',
+            nha_indicators_list,
+            index=nha_indicators_list.index(
+                'Current health expenditure (CHE) as percentage of GDP') if 'Current health expenditure (CHE) as percentage of GDP' in nha_indicators_list else 0,
+            key='line_indicator_select'  # Unique key for this selectbox
+        )
+
+        selected_nha_countries_line = st.multiselect(
+            'Select Countries for Line Chart',
+            all_nha_countries,
+            default=all_nha_countries[:5]  # Default to first 5 countries
+        )
+
+        if selected_nha_indicator_line and selected_nha_countries_line:
+            filtered_df_line = df_nha_display[  # Use df_nha_display
+                (df_nha_display['Indicators'] == selected_nha_indicator_line) &
+                (df_nha_display['Countries'].isin(selected_nha_countries_line))
+                ].sort_values(by='Year')  # dropna already done by df_nha_display
+
+            if not filtered_df_line.empty:
+                fig_line = px.line(
+                    filtered_df_line,
+                    x='Year',
+                    y='Value',
+                    color='Countries',
+                    title=f'{selected_nha_indicator_line} Trend for Selected Countries',
+                    labels={'Value': selected_nha_indicator_line, 'Year': 'Year'},
+                    markers=True  # Show markers on the line
+                )
+                st.plotly_chart(fig_line, use_container_width=True)
+            else:
+                st.info("No data available for the selected indicator and countries.")
+
+        # --- Visualization 2: Animated Scatter Plot - Relationship between two Indicators over Time ---
+        st.subheader("2. Relationship between Two Health Indicators Over Time (Animated)")
+
+        scatter_indicators_list = sorted(df_nha_display['Indicators'].unique())
+
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_nha_indicator_x = st.selectbox(
+                'Select X-axis Indicator',
+                scatter_indicators_list,
+                index=scatter_indicators_list.index(
+                    'Current health expenditure (CHE) as percentage of GDP') if 'Current health expenditure (CHE) as percentage of GDP' in scatter_indicators_list else 0,
+                key='scatter_x_indicator'
+            )
+        with col2:
+            selected_nha_indicator_y = st.selectbox(
+                'Select Y-axis Indicator',
+                scatter_indicators_list,
+                index=scatter_indicators_list.index(
+                    'Current health expenditure (CHE) per capita') if 'Current health expenditure (CHE) per capita' in scatter_indicators_list else 0,
+                key='scatter_y_indicator'
+            )
+
+        # CHANGE: Allow multiple countries for animated scatter plot
+        selected_nha_countries_scatter = st.multiselect(
+            'Select Countries for Animated Scatter Plot',
+            all_nha_countries,
+            default=all_nha_countries[:3],  # Default to a few countries for demonstration
+            key='scatter_countries_select'  # Changed key
+        )
+
+        if selected_nha_indicator_x and selected_nha_indicator_y and selected_nha_countries_scatter:
+            # Prepare data for scatter plot with multiple countries
+            # Filter df_nha_display for selected indicators AND selected countries
+            df_filtered_x = df_nha_display[
+                (df_nha_display['Indicators'] == selected_nha_indicator_x) &
+                (df_nha_display['Countries'].isin(selected_nha_countries_scatter))
+                ].rename(columns={'Value': 'X_Value'})[
+                ['Year', 'Countries', 'X_Value']]  # Include 'Countries' for animation_group
+
+            df_filtered_y = df_nha_display[
+                (df_nha_display['Indicators'] == selected_nha_indicator_y) &
+                (df_nha_display['Countries'].isin(selected_nha_countries_scatter))
+                ].rename(columns={'Value': 'Y_Value'})[['Year', 'Countries', 'Y_Value']]  # Include 'Countries'
+
+            # Merge on 'Year' and 'Countries'
+            df_scatter = pd.merge(df_filtered_x, df_filtered_y, on=['Year', 'Countries'], how='inner').dropna()
+
+            if not df_scatter.empty:
+                # Ensure 'Year' is sorted for animation
+                df_scatter_sorted = df_scatter.sort_values(by='Year')
+
+                fig_scatter = px.scatter(
+                    df_scatter_sorted,
+                    x='X_Value',
+                    y='Y_Value',
+                    animation_frame='Year',
+                    animation_group='Countries',  # Now 'Countries' column is present in df_scatter_sorted
+                    color='Countries',  # Color by country to distinguish paths
+                    size='X_Value',
+                    hover_name='Countries',  # Show country name on hover
+                    color_discrete_sequence=px.colors.qualitative.Plotly,
+                    title=f'Relationship between {selected_nha_indicator_x} and {selected_nha_indicator_y} over Time',
+                    labels={'X_Value': selected_nha_indicator_x, 'Y_Value': selected_nha_indicator_y},
+                    range_x=[df_scatter_sorted['X_Value'].min() * 0.9, df_scatter_sorted['X_Value'].max() * 1.1],
+                    range_y=[df_scatter_sorted['Y_Value'].min() * 0.9, df_scatter_sorted['Y_Value'].max() * 1.1]
+                )
+
+                # Set animation speed
+                fig_scatter.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 1000
+                fig_scatter.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 500
+
+                # --- IMPORTANT: Add the trail effect ---
+                fig_scatter.update_traces(
+                    mode='lines+markers',  # Ensure lines are drawn
+                    line=dict(width=5),  # Adjust line thickness
+                    marker=dict(size=10)  # Adjust marker size
+                )
+                fig_scatter.layout.updatemenus[0].buttons[0].args[1]["frame"]["redraw"] = True  # Force redraw for trail
+
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            else:
+                st.info(
+                    "No common data available for the selected indicators and countries to create the animated scatter plot.")
+        else:
+            st.info("Please select two indicators and at least one country for the animated scatter plot.")
+
+        # --- Visualization 3: Bar Chart - Indicator by Country for a Specific Year (MOVED TO BOTTOM) ---
+        st.subheader("3. Health Expenditure by Country for a Specific Year")  # Renumbered to 3
+
+        selected_nha_indicator_bar = st.selectbox(
+            'Select Indicator for Bar Chart',
+            nha_indicators_list,
+            index=nha_indicators_list.index(
+                'Current health expenditure (CHE) as percentage of GDP') if 'Current health expenditure (CHE) as percentage of GDP' in nha_indicators_list else 0,
+            key='bar_indicator_select'  # Unique key for this selectbox
+        )
+        selected_nha_year_bar = st.selectbox(
+            'Select Year for Bar Chart',
+            nha_years_list,
+            index=len(nha_years_list) - 1 if nha_years_list else 0,  # Default to latest year
+            key='bar_year_select'  # Unique key for this selectbox
+        )
+
+        if selected_nha_indicator_bar and selected_nha_year_bar:
+            filtered_df_bar = df_nha_display[  # Use df_nha_display
+                (df_nha_display['Indicators'] == selected_nha_indicator_bar) &
+                (df_nha_display['Year'] == selected_nha_year_bar)
+                ].sort_values(by='Value', ascending=False)  # dropna already done by df_nha_display
+
+            if not filtered_df_bar.empty:
+                fig_bar = px.bar(
+                    filtered_df_bar,
+                    x='Countries',
+                    y='Value',
+                    title=f'{selected_nha_indicator_bar} by Country in {selected_nha_year_bar}',
+                    labels={'Value': selected_nha_indicator_bar, 'Countries': 'Country'}
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info("No data available for the selected indicator and year.")
+
+    else:
+        st.warning("NHA Indicators data is not available or failed to load.")
+
+st.markdown("---")
+st.markdown("Dashboard developed using Streamlit and Plotly.")
