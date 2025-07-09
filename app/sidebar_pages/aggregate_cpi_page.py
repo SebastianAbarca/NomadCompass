@@ -161,6 +161,10 @@ def aggregate_cpi_page():
         else:
             st.info("Not enough data to calculate CPI stability for the selected population range.")
 
+
+        #create plot
+        # x_axis=population
+        #y_axis=aggregate_cpi
         # --- Explore Individual Country CPI ---
         all_countries_merged = sorted(df_cpi_with_population['COUNTRY_NAME'].unique())
         selected_country_agg_explore = st.selectbox('Select a Country to view all its CPI data:',

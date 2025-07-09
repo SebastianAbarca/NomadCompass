@@ -17,8 +17,19 @@ df_population = load_population_data()
 def population_page():
     # Define the explicitly available years
     AVAILABLE_YEARS = [2022, 2020, 2015, 2010, 2000, 1990, 1980, 1970]
-    # Sort them for proper slider order (ascending for min/max) - still good practice
-    AVAILABLE_YEARS.sort()
+    # Sort them for proper display order
+    AVAILABLE_YEARS.sort() # Ensure they are sorted for the pills display
+
+    # *** CRITICAL CHANGE HERE: Initialize selected_year with a guaranteed valid default ***
+    # This ensures selected_year always has an int value, even if st.pills
+    # returns None on initial render or if AVAILABLE_YEARS is unexpectedly empty.
+    if AVAILABLE_YEARS:
+        selected_year = AVAILABLE_YEARS[-1] # Default to the most recent year (e.g., 2022)
+    else:
+        # Fallback to a hardcoded year if AVAILABLE_YEARS is empty (highly unlikely for hardcoded list)
+        selected_year = 2022
+        st.error("Error: No available years defined for population data.")
+        return # Exit early if no years are available
 
     st.header("Population Data Insights")
     if df_population.empty:
@@ -62,18 +73,26 @@ def population_page():
         exclusion_text = f" (Excluding {', '.join(exclude_countries_global)})"
     # --- END GLOBAL FILTER ---
 
-    # --- MODIFIED: GLOBAL YEAR SELECTION (NO SLIDER) ---
+    # --- MODIFIED: GLOBAL YEAR SELECTION WITH ST.PILLS ---
     st.markdown("---")
-    st.subheader("Current Year for Single-Year Charts")
-    # Automatically set selected_year to the most recent available year
-    selected_year = max(AVAILABLE_YEARS)
-    st.write(f"All single-year charts are currently showing data for: **{int(selected_year)}** (Most Recent Available Year)")
-    option_map = {year: index for index, year in enumerate(AVAILABLE_YEARS)}
-    selected_year = st.pills(
-        label="Selected Year",
-        options=option_map,
-        selection_mode="single"
+    st.subheader("Select Year for All Single-Year Charts")
+
+    # The value from st.pills will be stored here.
+    # If it's not None, it will update the `selected_year` initialized above.
+    pills_output = st.pills(
+        label="Year", # Label for the pills component
+        options=AVAILABLE_YEARS, # List of years to display as pills
+        default=selected_year, # Use the already initialized selected_year as the default
+        key="global_year_pills_selector", # Unique key for the component
     )
+
+    # *** CRITICAL CHANGE HERE: Conditionally update selected_year based on pills_output ***
+    if pills_output is not None:
+        selected_year = pills_output
+    # Else, selected_year retains its initial default value, ensuring it's never None.
+
+
+    st.write(f"All single-year charts are currently showing data for: **{int(selected_year)}**")
     st.markdown("---")
     # --- END GLOBAL YEAR SELECTION ---
 
@@ -122,38 +141,38 @@ def population_page():
     st.subheader(f"Top Countries by Population{exclusion_text}")
 
     if 'Year' in df_population_filtered.columns and 'Population' in df_population_filtered.columns:
-        # This chart still uses the 'latest_year' logic as it's typically for the most recent data
-        latest_year = df_population_filtered['Year'].max()
-        if pd.isna(latest_year):
-            st.info("No valid years found in the filtered dataset for 'Top Countries by Population'.")
+        # This chart now uses the `selected_year` from the pills
+        # The pd.isna check is a safeguard, but selected_year should now always be an int
+        if pd.isna(selected_year): # This line should now virtually never be True
+            st.info("No valid year selected or found in the filtered dataset for 'Top Countries by Population'.")
         else:
-            st.write(f"Showing data for the latest available year: **{int(latest_year)}**")
+            st.write(f"Showing data for the selected year: **{int(selected_year)}**")
 
-            df_latest_year = df_population_filtered[df_population_filtered['Year'] == latest_year].sort_values(
+            df_selected_year = df_population_filtered[df_population_filtered['Year'] == selected_year].sort_values(
                 by='Population', ascending=False)
             top_n = st.slider(
                 "Select number of top countries:",
                 min_value=1,
-                max_value=min(50, len(df_latest_year)),
-                value=min(10, len(df_latest_year))
+                max_value=min(50, len(df_selected_year)),
+                value=min(10, len(df_selected_year))
             )
 
             if top_n == 0:
                 st.info("Please select a number greater than 0 for top countries.")
-            elif not df_latest_year.empty:
+            elif not df_selected_year.empty:
                 fig_top_population = px.bar(
-                    df_latest_year.head(top_n),
+                    df_selected_year.head(top_n),
                     x='Country/Territory',
                     y='Population',
                     color='Population',
-                    title=f'Top {top_n} Countries by Population in {int(latest_year)}{exclusion_text}',
+                    title=f'Top {top_n} Countries by Population in {int(selected_year)}{exclusion_text}',
                     labels={'Population': 'Population', 'Country/Territory': 'Country'},
                     hover_data={'Population': ':,', 'Area (km²)': ':,', 'Density (per km²)': ':.2f'}
                 )
                 fig_top_population.update_layout(xaxis={'categoryorder': 'total descending'})
                 st.plotly_chart(fig_top_population, use_container_width=True)
             else:
-                st.info(f"No population data found for the year {int(latest_year)} after filters.")
+                st.info(f"No population data found for the year {int(selected_year)} after filters.")
     else:
         st.warning(
             "Required columns ('Year', 'Population') not found in the dataset for 'Top Countries by Population' visualization after filters.")
@@ -161,7 +180,8 @@ def population_page():
     st.markdown("---")
 
     # 3. Population Density vs. Area (Scatter Plot)
-    st.subheader(f"Population Density vs. Area (Selected Year){exclusion_text}")
+    # Fixed typo here: added missing '(' around selected_year
+    st.subheader(f"Population Density vs. Area ({selected_year}){exclusion_text}")
     st.write("Examine the relationship between a country's area and its population density.")
 
     # Now uses the globally determined selected_year
@@ -213,7 +233,7 @@ def population_page():
     st.markdown("---")
 
     # --- NEW SECTION: 3b. Population Density vs. Area (Outliers Removed) ---
-    st.subheader(f"Population Density vs. Area (Top 5 Density Outliers Removed - Selected Year){exclusion_text}")
+    st.subheader(f"Population Density vs. Area (Top 5 Density Outliers Removed - {int(selected_year)}){exclusion_text}")
     st.write("This plot excludes the 5 countries with the highest population density to better show patterns among others.")
 
     # Now uses the globally determined selected_year
@@ -320,7 +340,7 @@ def population_page():
 
     # 5. Population Growth Rate (Bar Chart)
     st.subheader(f"Population Growth Rate by Country{exclusion_text}")
-    st.write("Visualize the population growth rates across different countries for a selected year.")
+    st.write(f"Visualize the population growth rates across different countries for {int(selected_year)}.") # Added int() for consistency
 
     # Now uses the globally determined selected_year
     df_growth_year = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
@@ -378,5 +398,38 @@ def population_page():
     else:
         st.info(
             f"No data available for Population vs. Density for the year {int(selected_year)}{exclusion_text}.")
+
+    st.markdown("---")
+
+    ## World population heatmap
+    st.subheader(f"World Population Density Heatmap ({int(selected_year)}){exclusion_text}")
+    st.write("Visualize global population density by country. Countries with missing data will be uncolored.")
+
+    # Prepare data for density map - do NOT dropna on 'Density (per km²)' or 'CCA3' here
+    df_map_density = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
+
+    # Ensure essential columns exist for mapping
+    if not df_map_density.empty and 'Density (per km²)' in df_map_density.columns and 'CCA3' in df_map_density.columns:
+        fig_density_map = px.choropleth(
+            df_map_density,
+            locations='CCA3',
+            color='Density (per km²)',
+            hover_name='Country/Territory',
+            color_continuous_scale=px.colors.sequential.Viridis,  # Another suitable sequential color scale
+            title=f'World Population Density Distribution in {int(selected_year)}{exclusion_text}',
+            projection='natural earth',
+            labels={'Density (per km²)': 'Density (per km²)'},
+            hover_data={'Population': ':,', 'Area (km²)': ':,', 'Density (per km²)': ':.2f'},
+            range_color='logarithmic'
+        )
+        # Add a light blue ocean and blue lakes/rivers for better aesthetics
+        fig_density_map.update_geos(
+            showland=True, showocean=True, oceancolor="LightBlue",
+            showlakes=True, lakecolor="Blue", showrivers=True, rivercolor="Blue"
+        )
+        st.plotly_chart(fig_density_map, use_container_width=True)
+    else:
+        st.info(
+            f"No sufficient data available for World Population Density Heatmap for the year {int(selected_year)}{exclusion_text}.")
 
     st.markdown("---")
