@@ -14,7 +14,6 @@ def nha_indicators_page():
 
         st.subheader("Raw Data Sample (Non-Null Values)")
         st.dataframe(df_nha_display.head())  # Display head of filtered data
-
         # Get unique indicators and years from the filtered DataFrame for selection
         nha_indicators_list = sorted(df_nha_display['Indicators'].unique())
         nha_years_list = sorted(df_nha_display['Year'].dropna().unique().tolist())

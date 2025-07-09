@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 
-df = pd.read_csv('world_population.csv')
+df = pd.read_csv('../world_population.csv')
 print(df.columns)
 id_vars = [
     'Rank', 'CCA3', 'Country/Territory', 'Capital', 'Continent',

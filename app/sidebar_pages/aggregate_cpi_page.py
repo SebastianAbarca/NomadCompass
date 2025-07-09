@@ -1,10 +1,15 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from ..util import util
+from app.util import util
+from data.etl import cpi_api_download
+
+
 def aggregate_cpi_page():
     st.header("Aggregate CPI Data")
-    df_aggregate_cpi = util.load_data('data/imf_cpi_all_countries_quarterly_data.csv')
+    df_aggregate_cpi = cpi_api_download.cpi_api_data()
+    df_aggregate_cpi['OBS_VALUE'] = pd.to_numeric(df_aggregate_cpi['OBS_VALUE'], errors='coerce')
+    df_aggregate_cpi.dropna(subset=['OBS_VALUE'], inplace=True)
     df_aggregate_cpi['COUNTRY_NAME'] = df_aggregate_cpi['COUNTRY'].apply(util.get_country_name)
     df_population = util.load_data('data/world_population_data.csv')
 

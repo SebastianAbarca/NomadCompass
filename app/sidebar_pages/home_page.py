@@ -1,17 +1,22 @@
 import streamlit as st
+from app.util import util
+
 
 def home_page():
-    st.header('Information')
-    st.markdown("""
-            This dashboard provides visualizations and insights into various economic and health indicators.
-            Use the sidebar to navigate between different data views:
-            - **Aggregate CPI**: Overall Consumer Price Index data for all countries, quarterly.
-            - **Categorical CPI**: Consumer Price Index data broken down by specific expenditure categories (Housing, Transport, etc.), quarterly.
-            - **NHA Indicators**: National Health Accounts indicators, transformed into a long format for easier analysis.
-            """)
-    st.subheader("Overview:")
-    describe = st.radio('Choose a category', ['Aggregate CPI', 'Categorical CPI', 'NHA Indicators'])
-
+    info_container = st.container()
+    with info_container:
+        st.header('Information')
+        st.markdown("""
+                       This dashboard provides visualizations and insights into various economic and health indicators.
+                       Use the sidebar to navigate between different data views:
+                       - **Aggregate CPI**: Overall Consumer Price Index data for all countries, quarterly.
+                       - **Categorical CPI**: Consumer Price Index data broken down by specific expenditure categories (Housing, Transport, etc.), quarterly.
+                       - **NHA Indicators**: National Health Accounts indicators, transformed into a long format for easier analysis.
+                       """)
+    radio_container = st.container(border=True)
+    with radio_container:
+        st.subheader("Overview:")
+        describe = st.radio('Choose a category', ['Aggregate CPI', 'Categorical CPI', 'NHA Indicators', 'Population'])
     if describe == 'Aggregate CPI':
         st.write("### Aggregate CPI Data")
         st.markdown("""
@@ -51,11 +56,11 @@ def home_page():
 
                 ## :small_blue_diamond: Example
 
-                If CPI rises by 3% from last year, it means the average consumer is paying **3% more** for the same goods and services compared to last year.
+                If CPI rises by 3% from last year, it means the average consumer is paying **3% more** on average 
+                for the same goods and services compared to last year.
 
                 ---
                 """)
-
     elif describe == 'Categorical CPI':
         st.write("### Granular CPI Data")
         st.markdown("""
@@ -148,7 +153,6 @@ def home_page():
                 ---
 
                 """)
-
     elif describe == 'NHA Indicators':
         st.write("### NHA Indicators")
         st.markdown("""
@@ -342,3 +346,51 @@ def home_page():
 
                             These programmes are essential for minimizing the impact of emergencies on population health and ensuring timely and effective medical responses when systems are under stress.
                             """)
+    elif describe == 'Population':
+        st.subheader("Understanding Population Data")
+        st.markdown("""
+                Population data provides fundamental insights into a country's size, structure, and potential.
+                It's a crucial demographic indicator that influences economic activity, resource allocation,
+                healthcare needs, and environmental impact. For digital nomads and remote workers, understanding
+                population characteristics can inform decisions related to local infrastructure, cost of living,
+                and cultural vibrancy.
+                """)
+
+        st.markdown("##### Key Aspects and Metrics:")
+        st.markdown("""
+                * **Total Population:** The raw number of people residing in a country or region.
+                * **Population Density:** The number of people per unit of area (e.g., per square kilometer),
+                    indicating how crowded or spacious a place is.
+                * **Population Growth Rate:** The speed at which a population is increasing or decreasing,
+                    influenced by birth rates, death rates, and migration.
+                * **Age Structure:** The distribution of a population across different age groups (e.g.,
+                    youth, working-age, elderly), which has significant implications for labor markets and social services.
+                """)
+
+        st.markdown("##### Data Source & Considerations:")
+        st.markdown("""
+                The population data used in this application is sourced from `data/world_population_data.csv`.
+                While valuable, it's important to consider:
+                * **Data Timeliness:** Population figures are dynamic and can change rapidly due to births, deaths, and migration.
+                * **Collection Methods:** Data collection can vary by country, affecting accuracy and comparability.
+                * **Projections vs. Actuals:** Some data points might be estimates or projections rather than precise counts.
+                """)
+
+        # Optional: Display a small snippet of the raw data (first few rows)
+        if st.checkbox("Show Raw Population Data Sample"):
+            try:
+                df_population_raw = util.load_data('data/world_population_data.csv')
+                # Select relevant columns for display and limit rows
+                display_cols = ['COUNTRY_NAME', 'Population', 'Area (km²)', 'Density (per km²)', 'Growth Rate',
+                                'World Population Percentage']
+                # Ensure 'COUNTRY_NAME' is available in the raw data or adjust column names
+                df_display = df_population_raw[
+                    ['Country/Territory', 'Population', 'Area (km²)', 'Density (per km²)', 'Growth Rate',
+                     'World Population Percentage']].copy()
+                df_display.rename(columns={'Country/Territory': 'COUNTRY_NAME'}, inplace=True)
+                st.dataframe(df_display.head(5))
+                st.write(f"Total entries in raw data: {len(df_population_raw)}")
+            except FileNotFoundError:
+                st.error("Raw population data file not found at 'data/world_population_data.csv'.")
+            except Exception as e:
+                st.warning(f"Could not load or display raw population data sample: {e}")

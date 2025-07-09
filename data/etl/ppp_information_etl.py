@@ -3,7 +3,7 @@ import os
 
 def get_ppp_info():
     # Step 1: Read the file, skipping metadata lines
-    df = pd.read_csv('PPP_yearly_infomation_data.csv', skiprows=4)
+    df = pd.read_csv('../PPP_yearly_infomation_data.csv', skiprows=4)
 
 
     # Step 3: Rename for clarity (optional)

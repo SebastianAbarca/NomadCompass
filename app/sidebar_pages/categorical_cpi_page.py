@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from ..util import util
-
+from  app.util import util
+from data.etl import imf_granular_cpi_etl
 def categorical_cpi_page():
-    df_granular_cpi = util.load_data('data/imf_cpi_selected_categories_quarterly_data.csv')
+    df_granular_cpi = imf_granular_cpi_etl.granular_cpi_data()
+    df_granular_cpi['OBS_VALUE'] = pd.to_numeric(df_granular_cpi['OBS_VALUE'], errors='coerce')
+    df_granular_cpi.dropna(subset=['OBS_VALUE'], inplace=True)  # Drop rows where conversion failed
+
     df_granular_cpi['COUNTRY_NAME'] = df_granular_cpi['COUNTRY'].apply(util.get_country_name)
     st.header("Categorical CPI Data")
     if df_granular_cpi.empty:
@@ -71,9 +74,28 @@ def categorical_cpi_page():
             st.plotly_chart(fig, use_container_width=True)
 
             # ==== Line Chart by Category ====
+            st.subheader("Line Chart by Category")  # Added subheader for clarity
             selected_line_category = st.selectbox("Compare specific category across countries:",
                                                   sorted(df_compare['Category'].unique()))
             cat_line_df = df_compare[df_compare['Category'] == selected_line_category]
+
+            # --- Calculate min, max, and interval for Y-axis ---
+            min_y_val = cat_line_df['OBS_VALUE'].min()
+            max_y_val = cat_line_df['OBS_VALUE'].max()
+
+            # Add a small buffer to min/max for better visualization (e.g., 5% buffer)
+            y_buffer = (max_y_val - min_y_val) * 0.05
+            y_axis_range = [min_y_val - y_buffer, max_y_val + y_buffer]
+
+            # Calculate a reasonable interval (aim for ~10 ticks)
+            # Ensure max_y_val - min_y_val is not zero to avoid division by zero
+            if (max_y_val - min_y_val) > 0:
+                y_interval = round((max_y_val - min_y_val) / 10, 0)  # Round to nearest integer
+                if y_interval == 0:  # Handle cases with very small range, ensure at least 1
+                    y_interval = 1
+            else:  # All values are the same
+                y_interval = 10  # Default to a reasonable interval if data is flat or single point
+
             fig_line = px.line(
                 cat_line_df,
                 x='Time',
@@ -83,6 +105,14 @@ def categorical_cpi_page():
                 labels={'OBS_VALUE': 'CPI (PPP)', 'Time': 'Quarter'},
                 template='plotly_white'
             )
+
+            # --- Apply Y-axis settings ---
+            fig_line.update_yaxes(
+                range=y_axis_range,
+                tick0=min_y_val,  # Start ticks from near the min value
+                dtick=y_interval  # Set the tick interval
+            )
+
             st.plotly_chart(fig_line, use_container_width=True)
 
             # ==== YoY % Change Bar Chart ====
