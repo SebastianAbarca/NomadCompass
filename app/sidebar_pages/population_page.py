@@ -408,6 +408,7 @@ def population_page():
     # Prepare data for density map - do NOT dropna on 'Density (per km²)' or 'CCA3' here
     df_map_density = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
 
+
     # Ensure essential columns exist for mapping
     if not df_map_density.empty and 'Density (per km²)' in df_map_density.columns and 'CCA3' in df_map_density.columns:
         fig_density_map = px.choropleth(
