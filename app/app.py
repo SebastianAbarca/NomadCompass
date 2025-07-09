@@ -41,8 +41,8 @@ with content_container:
         nha_indicators_page.nha_indicators_page()
     elif selected_page =='Population':
         population_page.population_page()
-#    elif selected_page == 'Clustering':
-#        clustering_page.clustering_page()
+    elif selected_page == 'Clustering':
+        st.write("In development...")
 
 st.warning("NOTE: "
                "\nCPI data is fetched using the IMF API"
