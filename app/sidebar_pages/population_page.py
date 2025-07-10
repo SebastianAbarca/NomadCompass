@@ -18,20 +18,15 @@ def population_page():
     # Define the explicitly available years
     AVAILABLE_YEARS = [2022, 2020, 2015, 2010, 2000, 1990, 1980, 1970]
     # Sort them for proper display order
-    AVAILABLE_YEARS.sort() # Ensure they are sorted for the pills display
+    AVAILABLE_YEARS.sort()  # Ensure they are sorted for the pills display
 
-    # *** CRITICAL CHANGE HERE: Initialize selected_year with a guaranteed valid default ***
-    # This ensures selected_year always has an int value, even if st.pills
-    # returns None on initial render or if AVAILABLE_YEARS is unexpectedly empty.
     if AVAILABLE_YEARS:
-        selected_year = AVAILABLE_YEARS[-1] # Default to the most recent year (e.g., 2022)
+        selected_year = AVAILABLE_YEARS[-1]
     else:
-        # Fallback to a hardcoded year if AVAILABLE_YEARS is empty (highly unlikely for hardcoded list)
         selected_year = 2022
-        st.error("Error: No available years defined for population data.")
-        return # Exit early if no years are available
+        st.error("Error: No available years defined for population data. Defaulting to 2022.")
+        return
 
-    st.header("Population Data Insights")
     if df_population.empty:
         st.warning(
             "Population data not loaded. Please ensure 'data/world_population_data.csv' exists and is accessible.")
@@ -54,16 +49,12 @@ def population_page():
         df_population_filtered = df_population_filtered[
             ~df_population_filtered['Country/Territory'].isin(exclude_countries_global)]
 
-    # Ensure 'Year' is treated as a numerical type globally for consistency
     if 'Year' in df_population_filtered.columns:
         df_population_filtered['Year'] = pd.to_numeric(df_population_filtered['Year'], errors='coerce')
-        # Drop rows where Year couldn't be converted before any further operations
         df_population_filtered.dropna(subset=['Year'], inplace=True)
 
-    # --- NEW: Filter df_population_filtered to ONLY include the AVAILABLE_YEARS ---
     df_population_filtered = df_population_filtered[df_population_filtered['Year'].isin(AVAILABLE_YEARS)]
 
-    # Check if there's any valid data left after all filtering and year conversion
     if df_population_filtered.empty:
         st.warning("No valid data remaining after applying global filters and filtering for available years.")
         return
@@ -73,33 +64,26 @@ def population_page():
         exclusion_text = f" (Excluding {', '.join(exclude_countries_global)})"
     # --- END GLOBAL FILTER ---
 
-    # --- MODIFIED: GLOBAL YEAR SELECTION WITH ST.PILLS ---
+    # --- GLOBAL YEAR SELECTION WITH ST.PILLS ---
     st.markdown("---")
     st.subheader("Select Year for All Single-Year Charts")
 
-    # The value from st.pills will be stored here.
-    # If it's not None, it will update the `selected_year` initialized above.
     pills_output = st.pills(
-        label="Year", # Label for the pills component
-        options=AVAILABLE_YEARS, # List of years to display as pills
-        default=selected_year, # Use the already initialized selected_year as the default
-        key="global_year_pills_selector", # Unique key for the component
+        label="Year",
+        options=AVAILABLE_YEARS,
+        default=selected_year,
+        key="global_year_pills_selector",
     )
 
-    # *** CRITICAL CHANGE HERE: Conditionally update selected_year based on pills_output ***
     if pills_output is not None:
         selected_year = pills_output
-    # Else, selected_year retains its initial default value, ensuring it's never None.
-
 
     st.write(f"All single-year charts are currently showing data for: **{int(selected_year)}**")
     st.markdown("---")
     # --- END GLOBAL YEAR SELECTION ---
 
-
-    # Display the raw dataframe (optional, good for initial inspection)
     with st.expander("View Raw Population Data"):
-        st.dataframe(df_population_filtered)  # Display filtered data
+        st.dataframe(df_population_filtered)
         st.write("Columns available for analysis:", df_population_filtered.columns.tolist())
 
     st.markdown("---")
@@ -111,7 +95,7 @@ def population_page():
     selected_countries_trend = st.multiselect(
         "Select Countries to Compare Population Trends:",
         options=countries,
-        default=countries[:5] if len(countries) >= 5 else countries,  # Default to top 5 or all if less
+        default=countries[:5] if len(countries) >= 5 else countries,
         key="trend_countries_selector"
     )
 
@@ -141,9 +125,7 @@ def population_page():
     st.subheader(f"Top Countries by Population{exclusion_text}")
 
     if 'Year' in df_population_filtered.columns and 'Population' in df_population_filtered.columns:
-        # This chart now uses the `selected_year` from the pills
-        # The pd.isna check is a safeguard, but selected_year should now always be an int
-        if pd.isna(selected_year): # This line should now virtually never be True
+        if pd.isna(selected_year):
             st.info("No valid year selected or found in the filtered dataset for 'Top Countries by Population'.")
         else:
             st.write(f"Showing data for the selected year: **{int(selected_year)}**")
@@ -180,14 +162,11 @@ def population_page():
     st.markdown("---")
 
     # 3. Population Density vs. Area (Scatter Plot)
-    # Fixed typo here: added missing '(' around selected_year
     st.subheader(f"Population Density vs. Area ({selected_year}){exclusion_text}")
     st.write("Examine the relationship between a country's area and its population density.")
 
-    # Now uses the globally determined selected_year
     df_density_year = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
     df_density_year.dropna(subset=['Area (km²)', 'Density (per km²)', 'Population'], inplace=True)
-
 
     if not df_density_year.empty:
         min_area = df_density_year['Area (km²)'].min()
@@ -202,7 +181,6 @@ def population_page():
         range_y_min_val = max(0.1, min_density * 0.9)
         range_y_max_val = max_density * 1.1
 
-
         fig_density = px.scatter(
             df_density_year,
             x='Area (km²)',
@@ -213,7 +191,7 @@ def population_page():
             color='Country/Territory',
             hover_name='Country/Territory',
             log_x=True,
-            title=f'Population Density vs. Area for {int(selected_year)}{exclusion_text}', # Used selected_year
+            title=f'Population Density vs. Area for {int(selected_year)}{exclusion_text}',
             labels={
                 'Area (km²)': 'Area (km²)',
                 'Density (per km²)': 'Density (per km²)',
@@ -232,29 +210,28 @@ def population_page():
 
     st.markdown("---")
 
-    # --- NEW SECTION: 3b. Population Density vs. Area (Outliers Removed) ---
+    # 3b. Population Density vs. Area (Outliers Removed)
     st.subheader(f"Population Density vs. Area (Top 5 Density Outliers Removed - {int(selected_year)}){exclusion_text}")
-    st.write("This plot excludes the 5 countries with the highest population density to better show patterns among others.")
+    st.write(
+        "This plot excludes the 5 countries with the highest population density to better show patterns among others.")
 
-    # Now uses the globally determined selected_year
     df_density_year_filtered_outliers = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
     df_density_year_filtered_outliers.dropna(subset=['Area (km²)', 'Density (per km²)', 'Population'], inplace=True)
 
     if not df_density_year_filtered_outliers.empty:
-        # Slider for number of outliers to remove (independent of year)
-        n_outliers_to_remove = st.slider("Number of Outliers to remove", min_value=1, max_value=min(10, len(df_density_year_filtered_outliers)-1), value=5, key="num_outliers_slider")
-        if n_outliers_to_remove == 0: # Handle case if slider is accidentally set to 0, though min_value=1
-             st.info("Please select a number greater than 0 for outliers to remove.")
+        n_outliers_to_remove = st.slider("Number of Outliers to remove", min_value=1,
+                                         max_value=min(10, len(df_density_year_filtered_outliers) - 1), value=5,
+                                         key="num_outliers_slider")
+        if n_outliers_to_remove == 0:
+            st.info("Please select a number greater than 0 for outliers to remove.")
         else:
-            # Sort by Density in descending order and remove the top n
             df_density_year_filtered_outliers = df_density_year_filtered_outliers.sort_values(
                 by='Density (per km²)', ascending=False
-            ).iloc[n_outliers_to_remove:].copy() # Remove the top n
+            ).iloc[n_outliers_to_remove:].copy()
 
             if df_density_year_filtered_outliers.empty:
                 st.info("No data remaining after removing top outliers. Try reducing the number of outliers to remove.")
             else:
-                # Recalculate ranges based on the new, filtered dataframe
                 min_area_outliers = df_density_year_filtered_outliers['Area (km²)'].min()
                 max_area_outliers = df_density_year_filtered_outliers['Area (km²)'].max()
 
@@ -277,7 +254,7 @@ def population_page():
                     color='Country/Territory',
                     hover_name='Country/Territory',
                     log_x=True,
-                    title=f'Population Density vs. Area in {int(selected_year)}{exclusion_text} (Top {n_outliers_to_remove} Density Outliers Removed)', # Used selected_year
+                    title=f'Population Density vs. Area in {int(selected_year)}{exclusion_text} (Top {n_outliers_to_remove} Density Outliers Removed)',
                     labels={
                         'Area (km²)': 'Area (km²)',
                         'Density (per km²)': 'Density (per km²)',
@@ -300,7 +277,6 @@ def population_page():
     # 4. World Population Percentage (Pie Chart for a specific year)
     st.subheader(f"World Population Share by Country{exclusion_text}")
 
-    # Now uses the globally determined selected_year
     df_percentage_year = df_population_filtered[df_population_filtered['Year'] == selected_year].sort_values(
         by='World Population Percentage', ascending=False)
 
@@ -316,7 +292,7 @@ def population_page():
                 'Country/Territory': 'Other Countries',
                 'World Population Percentage': other_percentage,
                 'Population': other_population,
-                'Year': selected_year, # Used selected_year
+                'Year': selected_year,
                 'CCA3': 'OTH',
                 'Rank': np.nan, 'Area (km²)': np.nan, 'Density (per km²)': np.nan, 'Growth Rate': np.nan,
                 'World Population Percentage Rank': np.nan
@@ -327,7 +303,7 @@ def population_page():
             df_large_share,
             values='World Population Percentage',
             names='Country/Territory',
-            title=f'World Population Share by Country in {int(selected_year)}{exclusion_text}', # Used selected_year
+            title=f'World Population Share by Country in {int(selected_year)}{exclusion_text}',
             hover_data={'Population': ':,', 'World Population Percentage': ':.2f%'},
             labels={'World Population Percentage': 'Share (%)'}
         )
@@ -340,9 +316,8 @@ def population_page():
 
     # 5. Population Growth Rate (Bar Chart)
     st.subheader(f"Population Growth Rate by Country{exclusion_text}")
-    st.write(f"Visualize the population growth rates across different countries for {int(selected_year)}.") # Added int() for consistency
+    st.write(f"Visualize the population growth rates across different countries for {int(selected_year)}.")
 
-    # Now uses the globally determined selected_year
     df_growth_year = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
     df_growth_year_cleaned = df_growth_year.dropna(subset=['Growth Rate'])
 
@@ -352,7 +327,7 @@ def population_page():
             x='Country/Territory',
             y='Growth Rate',
             color='Growth Rate',
-            title=f'Population Growth Rate by Country in {int(selected_year)}{exclusion_text}', # Used selected_year
+            title=f'Population Growth Rate by Country in {int(selected_year)}{exclusion_text}',
             labels={'Growth Rate': 'Growth Rate (%)'},
             hover_data={'Growth Rate': ':.2%', 'Population': ':,', 'Density (per km²)': ':.2f'}
         )
@@ -363,11 +338,10 @@ def population_page():
 
     st.markdown("---")
 
-    # --- NEW SECTION: 6. Population vs. Density (Scatter Plot) ---
+    # 6. Population vs. Density (Scatter Plot)
     st.subheader(f"Population vs. Density Scatter Plot{exclusion_text}")
     st.write("Explore the relationship between a country's total population and its density.")
 
-    # Now uses the globally determined selected_year
     df_pop_density_scatter = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
     df_pop_density_scatter.dropna(subset=['Population', 'Density (per km²)'], inplace=True)
 
@@ -381,7 +355,7 @@ def population_page():
             hover_name='Country/Territory',
             log_x=True,
             log_y=True,
-            title=f'Population vs. Density in {int(selected_year)}{exclusion_text}', # Used selected_year
+            title=f'Population vs. Density in {int(selected_year)}{exclusion_text}',
             labels={
                 'Population': 'Population',
                 'Density (per km²)': 'Density (per km²)'
@@ -401,29 +375,89 @@ def population_page():
 
     st.markdown("---")
 
-    ## World population heatmap
-    st.subheader(f"World Population Density Heatmap ({int(selected_year)}){exclusion_text}")
-    st.write("Visualize global population density by country. Countries with missing data will be uncolored.")
+    # 7. World Population Heatmap
+    st.subheader(f"World Population Heatmap ({int(selected_year)}){exclusion_text}")
+    st.write("Visualize global population distribution by country. Countries with missing data will be uncolored.")
 
-    # Prepare data for density map - do NOT dropna on 'Density (per km²)' or 'CCA3' here
+    df_map_population = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
+
+    if not df_map_population.empty and 'Population' in df_map_population.columns and 'CCA3' in df_map_population.columns:
+        fig_population_map = px.choropleth(
+            df_map_population,
+            locations='CCA3',
+            color='Population',
+            hover_name='Country/Territory',
+            color_continuous_scale=px.colors.sequential.Plasma,
+            title=f'World Population Distribution in {int(selected_year)}{exclusion_text}',
+            projection='natural earth',
+            labels={'Population': 'Population'},
+            hover_data={'Population': ':,', 'Area (km²)': ':,', 'Density (per km²)': ':.2f'}
+        )
+        fig_population_map.update_geos(
+            showland=True, showocean=True, oceancolor="LightBlue",
+            showlakes=True, lakecolor="Blue", showrivers=True, rivercolor="Blue"
+        )
+        st.plotly_chart(fig_population_map, use_container_width=True)
+    else:
+        st.info(
+            f"No sufficient data available for World Population Heatmap for the year {int(selected_year)}{exclusion_text}.")
+
+    st.markdown("---")
+
+    # 8. World Population Density Heatmap (Manually Log-Scaled)
+    st.subheader(f"World Population Density Heatmap ({int(selected_year)}){exclusion_text}")
+    st.write(
+        "Visualize global population density by country. Colors are on a **logarithmic scale** for better expressiveness. Countries with missing or zero density data will be uncolored.")
+
     df_map_density = df_population_filtered[df_population_filtered['Year'] == selected_year].copy()
 
+    # --- MANUAL LOG TRANSFORMATION ---
+    df_map_density['Density (per km²)'] = pd.to_numeric(df_map_density['Density (per km²)'], errors='coerce')
 
-    # Ensure essential columns exist for mapping
-    if not df_map_density.empty and 'Density (per km²)' in df_map_density.columns and 'CCA3' in df_map_density.columns:
+    # Replace 0s with NaN for log transformation, and apply a small offset for very small positive values if desired
+    # For choropleth, if a value is NaN, the country will be uncolored, which is good for 0 density.
+    df_map_density['Density_Log10'] = df_map_density['Density (per km²)'].apply(
+        lambda x: np.log10(x) if x > 0 else np.nan
+    )
+
+    # Drop rows where 'CCA3' or the new log-transformed density became NaN
+    df_map_density.dropna(subset=['CCA3', 'Density_Log10'], inplace=True)
+    # --- END MANUAL LOG TRANSFORMATION ---
+
+    if not df_map_density.empty:
+        # Determine the min/max of the log-transformed data for the color scale legend.
+        # This will make the color bar show log values.
+        min_log_density = df_map_density['Density_Log10'].min()
+        max_log_density = df_map_density['Density_Log10'].max()
+
+        # If you still want to cap the *visual* range to a maximum original value (e.g., 500)
+        # after log transform, you can set color_continuous_max to log10(500).
+        # Otherwise, let it scale to the max log value in your data.
+
+        # Example if you want to cap at original 500 density:
+        # capped_log_max = np.log10(500) if max_log_density > np.log10(500) else max_log_density
+
         fig_density_map = px.choropleth(
             df_map_density,
             locations='CCA3',
-            color='Density (per km²)',
+            color='Density_Log10',  # Use the manually log-transformed column
             hover_name='Country/Territory',
-            color_continuous_scale=px.colors.sequential.Viridis,  # Another suitable sequential color scale
-            title=f'World Population Density Distribution in {int(selected_year)}{exclusion_text}',
+            color_continuous_scale=px.colors.sequential.Viridis,
+            title=f'World Population Density Distribution in {int(selected_year)}{exclusion_text} (Logarithmic Scale)',
             projection='natural earth',
-            labels={'Density (per km²)': 'Density (per km²)'},
-            hover_data={'Population': ':,', 'Area (km²)': ':,', 'Density (per km²)': ':.2f'},
-            range_color='logarithmic'
+            # Labels for the color bar and hover info
+            labels={'Density_Log10': 'Density (log10)'},
+            # Crucially, show original density in hover for context
+            hover_data={
+                'Population': ':,',
+                'Area (km²)': ':,',
+                'Density (per km²)': ':.2f',  # Show original density here
+                'Density_Log10': ':.2f'  # Show log density here for debugging/understanding
+            },
+            # Optional: Set a continuous color range using the log-transformed values if desired
+            # For instance, if you want the color bar to span log10(1) to log10(500)
+            # color_continuous_range=[np.log10(1), np.log10(500)]
         )
-        # Add a light blue ocean and blue lakes/rivers for better aesthetics
         fig_density_map.update_geos(
             showland=True, showocean=True, oceancolor="LightBlue",
             showlakes=True, lakecolor="Blue", showrivers=True, rivercolor="Blue"
