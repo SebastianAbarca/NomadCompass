@@ -11,7 +11,7 @@ AVAILABLE_YEARS.sort()
 # Load data once at the beginning to avoid re-loading on every Streamlit rerun
 @st.cache_data
 def load_population_data():
-    return util.load_data('data/world_population_data.csv')
+    return util.load_data('../../data/world_population_data.csv')
 def preprocess_and_filter_population_data(df: pd.DataFrame, available_years: list, exclude_countries: list):
     df_filtered = df.copy()
 
