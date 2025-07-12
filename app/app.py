@@ -21,7 +21,7 @@ if project_root_dir not in sys.path:
 from app.sidebar_pages import aggregate_cpi_page, categorical_cpi_page, home_page, nha_indicators_page, population_page, \
     clustering_page
 pages = [
-    'Home', 'Aggregate CPI', 'Categorical CPI', 'NHA Indicators', 'Population', 'Clustering'
+    'Home', 'Aggregate CPI', 'Categorical CPI', 'NHA Indicators', 'Population'
 ]
 st.sidebar.header('Site Map')
 selected_page = st.sidebar.radio('Go to', pages) # Fixed input variable
@@ -41,8 +41,7 @@ with content_container:
         nha_indicators_page.nha_indicators_page()
     elif selected_page =='Population':
         population_page.population_page()
-    elif selected_page == 'Clustering':
-        st.write("In development...")
+
 
 st.warning("NOTE: "
                "\nCPI data is fetched using the IMF API"

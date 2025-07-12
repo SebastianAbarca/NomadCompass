@@ -1,178 +1,186 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from app.util import util
-from data.etl import cpi_api_download
+from app.util import util, my_math, data_processing
+from app.util import aggregate_cpi_graphs
 
 
 def aggregate_cpi_page():
     st.header("Aggregate CPI Data")
-    df_aggregate_cpi = cpi_api_download.cpi_api_data()
-    df_aggregate_cpi['OBS_VALUE'] = pd.to_numeric(df_aggregate_cpi['OBS_VALUE'], errors='coerce')
-    df_aggregate_cpi.dropna(subset=['OBS_VALUE'], inplace=True)
-    df_aggregate_cpi['COUNTRY_NAME'] = df_aggregate_cpi['COUNTRY'].apply(util.get_country_name)
-    df_population = util.load_data('data/world_population_data.csv')
 
-    if df_aggregate_cpi.empty:
-        st.warning("Aggregate CPI data not loaded.")
+    # --- Data Loading and Initial Preprocessing ---
+    df_cpi = data_processing.load_and_preprocess_cpi_data()
+    df_population = data_processing.load_and_preprocess_population_data()
+
+    if df_cpi.empty:
+        st.info("No CPI data available to display the Aggregate CPI page.")
+        return
+
+    # --- CPI Over Time Visualization ---
+    st.subheader("CPI Over Time by Country")
+    countries = df_cpi['COUNTRY_NAME'].unique()
+    selected_countries = st.multiselect(
+        "Select one or more countries to visualize CPI over time:",
+        options=sorted(countries),
+        default=['Aruba']
+    )
+
+    if selected_countries:
+        aggregate_cpi_graphs.plot_cpi_over_time(df_cpi, selected_countries)
     else:
-        # --- Data Preprocessing for CPI ---
-        df_cpi = df_aggregate_cpi.copy()
+        st.info("Please select at least one country to display the CPI over time chart.")
 
-        # Safely convert 'TIME_PERIOD' to PeriodIndex for proper quarterly handling
-        try:
-            # Assuming 'TIME_PERIOD' is directly like '2020Q1', '2020Q2', etc.
-            df_cpi['TIME_PERIOD_PERIOD'] = pd.PeriodIndex(df_cpi['TIME_PERIOD'], freq='Q')
-        except Exception as e:
-            st.error(
-                f"Error converting CPI TIME_PERIOD to a PeriodIndex: {e}. Please ensure it's in 'YYYYQn' format (e.g., '2020Q1').")
+    st.markdown("---")
 
-        # Extract Year and Quarter Number using the PeriodIndex accessor
-        df_cpi['Year'] = df_cpi['TIME_PERIOD_PERIOD'].dt.year
-        df_cpi['Q_Num'] = df_cpi['TIME_PERIOD_PERIOD'].dt.quarter
+    # --- CPI Stability Analysis ---
+    st.subheader("Top 10 Most Stable Countries (Lowest CPI Volatility)")
 
-        # Convert PeriodIndex to Timestamp for Plotly (Plotly prefers datetime objects)
-        df_cpi['Time'] = df_cpi['TIME_PERIOD_PERIOD'].dt.to_timestamp()
-        df_cpi = df_cpi.sort_values(['COUNTRY_NAME', 'Time'])
+    # Call the new data_processing function to merge CPI with population for filtering
+    df_cpi_with_population_for_stability = data_processing.merge_cpi_with_population_for_filtering(
+        df_cpi, df_population
+    )
 
-        # Calculate Year-over-Year (YoY) % change
-        # Ensure data is sorted for correct pct_change calculation within each country group
-        df_cpi['YoY_change'] = df_cpi.groupby('COUNTRY_NAME')['OBS_VALUE'].pct_change(periods=4) * 100
+    # Initialize filtered_cpi_df from the merged DataFrame
+    filtered_cpi_df = df_cpi_with_population_for_stability.copy()
 
-        # --- CPI Over Time Visualization ---
-        st.subheader("CPI Over Time by Country")
-        countries = df_cpi['COUNTRY_NAME'].unique()
-        selected_countries = st.multiselect(
-            "Select one or more countries to visualize CPI over time:",
-            options=sorted(countries),
-            default=['Aruba']
-        )
+    # --- Population Filtering for Stability Analysis UI (THIS IS THE CORRECT BLOCK) ---
+    if 'Population' in filtered_cpi_df.columns and not filtered_cpi_df['Population'].isnull().all():
+        min_pop_val = filtered_cpi_df['Population'].min()
+        max_pop_val = filtered_cpi_df['Population'].max()
 
-        if selected_countries:
-            df_filtered_plot = df_cpi[df_cpi['COUNTRY_NAME'].isin(selected_countries)].copy()
+        # Convert to millions for slider readability
+        min_pop_M = int(min_pop_val // 1_000_000)
+        max_pop_M = int((max_pop_val + 999_999) // 1_000_000)
 
-            fig_cpi_time = px.line(
-                df_filtered_plot,
-                x='Time',
-                y='OBS_VALUE',
-                color='COUNTRY_NAME',
-                markers=True,
-                labels={'Time': 'Quarter', 'OBS_VALUE': 'CPI Value'},
-                title='Aggregate CPI Over Time by Country',
-                template='plotly_white'
-            )
-            fig_cpi_time.update_layout(hovermode='x unified', title_font_size=20)
-            st.plotly_chart(fig_cpi_time, use_container_width=True)
+        # Handle edge case where min and max population are very close or identical
+        if min_pop_M >= max_pop_M:
+            population_range_M = (min_pop_M, min_pop_M + 1) if min_pop_M != 0 else (0, 1)
+            st.info(
+                f"Limited effective population range for slider: {population_range_M[0]}M to {population_range_M[1]}M.")
         else:
-            st.info("Please select at least one country to display the CPI over time chart.")
-
-        # --- CPI Stability Analysis ---
-        st.subheader("Top 10 Most Stable Countries (Lowest CPI Volatility)")
-
-        # --- Prepare Population Data for Merging ---
-        df_pop_processed = df_population.copy()
-        if 'Country/Territory' in df_pop_processed.columns:
-            df_pop_processed.rename(columns={'Country/Territory': 'COUNTRY_NAME'}, inplace=True)
-        else:
-            st.warning("Population data is missing 'Country/Territory' column. Cannot merge effectively.")
-            df_pop_processed = pd.DataFrame()
-
-        if not df_pop_processed.empty and 'Year' in df_pop_processed.columns and 'Population' in df_pop_processed.columns:
-            df_pop_for_merge = df_pop_processed[['COUNTRY_NAME', 'Year', 'Population']].copy()
-
-            # --- Merge CPI data with Population data ---
-            df_cpi_with_population = pd.merge(
-                df_cpi,
-                df_pop_for_merge,
-                on=['COUNTRY_NAME', 'Year'],
-                how='left'
-            )
-        else:
-            st.warning(
-                "Population data is not in the expected format or is empty. Stability analysis will proceed without population filtering.")
-            df_cpi_with_population = df_cpi.copy()
-
-        # --- Population Filtering for Stability Analysis ---
-        filtered_cpi_df = df_cpi_with_population.copy()
-
-        if 'Population' in filtered_cpi_df.columns and not filtered_cpi_df['Population'].isnull().all():
-            min_pop = int(filtered_cpi_df['Population'].min())
-            max_pop = int(filtered_cpi_df['Population'].max())
-
-            min_pop_M = min_pop // 1_000_000
-            max_pop_M = (max_pop + 999_999) // 1_000_000
-
             population_range_M = st.slider(
                 'Select Population Range (in millions) for Stability Analysis:',
                 min_value=min_pop_M,
                 max_value=max_pop_M,
                 value=(min_pop_M, max_pop_M),
-                step=10,
+                step=max(1, (max_pop_M - min_pop_M) // 100),
                 format='%dM'
             )
 
-            filtered_cpi_df = filtered_cpi_df[
-                (filtered_cpi_df['Population'] >= population_range_M[0] * 1_000_000) &
-                (filtered_cpi_df['Population'] <= population_range_M[1] * 1_000_000)
-                ].copy()
-            st.info(
-                f"Filtering countries with population between {population_range_M[0]}M and {population_range_M[1]}M.")
-        else:
-            st.info(
-                "Population data not available or incomplete for filtering. Displaying stability for all countries with CPI data.")
+        # Apply population filter
+        filtered_cpi_df = filtered_cpi_df[
+            (filtered_cpi_df['Population'] >= population_range_M[0] * 1_000_000) &
+            (filtered_cpi_df['Population'] <= population_range_M[1] * 1_000_000)
+            ].copy()
+        st.info(f"Filtering countries with population between {population_range_M[0]}M and {population_range_M[1]}M.")
+    else:
+        st.info(
+            "Population data not available or incomplete for filtering. Stability analysis will proceed without population filtering.")
 
-        # --- Calculate Stability ---
-        if 'YoY_change' not in filtered_cpi_df.columns or filtered_cpi_df['YoY_change'].isnull().all():
-            st.warning(
-                "YoY_change data not available or is all null after filtering. Cannot calculate stability.")
-            stability_df = pd.DataFrame()
-        else:
-            stability_df = (
-                filtered_cpi_df.groupby('COUNTRY_NAME')['YoY_change']
-                .std()
-                .dropna()
-                .sort_values()
-                .reset_index()
-                .rename(columns={'YoY_change': 'YoY_StdDev'})
+    # --- Calculate Stability ---
+    stability_df = data_processing.calculate_cpi_stability(filtered_cpi_df)
+
+    # --- Display Stability Results ---
+    if not stability_df.empty:
+        top_stable = stability_df.head(10)
+
+        col1, col2 = st.columns([4, 3])
+        with col1:
+            aggregate_cpi_graphs.plot_cpi_stability_bar(top_stable)
+        with col2:
+            st.write("### Stability Data Table")
+            st.dataframe(top_stable.set_index('COUNTRY_NAME').round(2), use_container_width=True)
+    else:
+        st.info("Not enough data to calculate CPI stability for the selected population range.")
+
+    st.markdown("---")
+
+    # --- CPI by Population Scatter Plot ---
+    st.subheader("CPI by Population Scatter Plot")
+    st.write(
+        "Explore the relationship between a country's CPI and its population, including historical and projected population data.")
+
+    # Prepare data for scatter plot using data_processing function
+    df_cpi_pop_merged_initial = data_processing.prepare_cpi_population_scatter_data(df_cpi, df_population)
+
+    # --- Outlier Filtering Section for Scatter Plot UI (now calls my_math) ---
+    df_cpi_pop_merged_filtered = df_cpi_pop_merged_initial.copy()  # Initialize with unfiltered data
+
+    if not df_cpi_pop_merged_initial.empty:
+        st.markdown("##### Scatter Plot Outlier Filtering")
+        enable_outlier_filter = st.checkbox("Enable Outlier Filtering for Scatter Plot", value=True,
+                                            key="scatter_outlier_toggle")
+
+        if enable_outlier_filter:
+            iqr_multiplier = st.slider(
+                "IQR Multiplier (determines outlier sensitivity):",
+                min_value=0.0,
+                max_value=15.0,
+                value=5.0,
+                step=1.0,
+                help="Values outside Q1 - (Multiplier * IQR) and Q3 + (Multiplier * IQR) are considered outliers."
             )
 
-        # --- Display Stability Results ---
-        if not stability_df.empty:
-            top_stable = stability_df.head(10)
+            columns_to_filter = ['Population', 'Avg_Annual_CPI_Value'] # Corrected column name
 
-            col1, col2 = st.columns([4, 3])
-            with col1:
-                fig_stab = px.bar(
-                    top_stable,
-                    x='COUNTRY_NAME',
-                    y='YoY_StdDev',
-                    text=top_stable['YoY_StdDev'].round(2),
-                    labels={'YoY_StdDev': 'Std. Dev of YoY % Change', 'COUNTRY_NAME': 'Country'},
-                    title='Top 10 CPI Stable Countries',
-                    template='plotly_white'
-                )
-                fig_stab.update_traces(marker_color='seagreen')
-                fig_stab.update_layout(xaxis_title_text='')
-                st.plotly_chart(fig_stab, use_container_width=True)
+            # Call the outlier function from my_math.py
+            df_cpi_pop_merged_filtered, removed_rows = my_math.apply_iqr_outlier_filter(
+                df_cpi_pop_merged_initial, columns_to_filter, iqr_multiplier
+            )
 
-            with col2:
-                st.write("### Stability Data Table")
-                st.dataframe(top_stable.set_index('COUNTRY_NAME').round(2), use_container_width=True)
+            if removed_rows > 0:
+                st.info(
+                    f"Removed {removed_rows} outlier rows ({removed_rows / len(df_cpi_pop_merged_initial):.1%}) from the scatter plot data using IQR filtering (Multiplier: {iqr_multiplier}).")
+            else:
+                st.info("No outliers detected or removed with the current settings.")
         else:
-            st.info("Not enough data to calculate CPI stability for the selected population range.")
+            st.info("Outlier filtering is disabled. All available data will be plotted.")
+    else:
+        st.warning("No sufficient combined CPI and Population data available to apply outlier filtering.")
 
+    # --- Scatter Plot Display ---
+    if not df_cpi_pop_merged_filtered.empty:
+        min_plot_year = int(df_cpi_pop_merged_filtered['Year'].min())
+        max_plot_year = int(df_cpi_pop_merged_filtered['Year'].max())
 
-        #create plot
-        # x_axis=population
-        #y_axis=aggregate_cpi
-        # --- Explore Individual Country CPI ---
-        all_countries_merged = sorted(df_cpi_with_population['COUNTRY_NAME'].unique())
-        selected_country_agg_explore = st.selectbox('Select a Country to view all its CPI data:',
-                                                    all_countries_merged)
+        # Determine a sensible default year for the slider
+        default_plot_year = min(max_plot_year, 2022)
+        if default_plot_year < min_plot_year:
+            default_plot_year = max_plot_year
 
-        if selected_country_agg_explore:
-            country_df_agg_explore = df_cpi_with_population[
-                df_cpi_with_population['COUNTRY_NAME'] == selected_country_agg_explore
-                ].copy()
-            st.write(f"### Detailed CPI Data for {selected_country_agg_explore}")
-            st.dataframe(country_df_agg_explore.round(2), use_container_width=True)
+        selected_plot_year = st.slider(
+            "Select Year for CPI vs. Population Scatter Plot:",
+            min_value=min_plot_year,
+            max_value=max_plot_year,
+            value=default_plot_year,
+            step=1,
+            format="%d",
+            key="cpi_pop_scatter_slider"
+        )
+
+        df_plot_cpi_pop = df_cpi_pop_merged_filtered[df_cpi_pop_merged_filtered['Year'] == selected_plot_year].copy()
+
+        if not df_plot_cpi_pop.empty:
+            aggregate_cpi_graphs.plot_cpi_population_scatter(df_plot_cpi_pop, selected_plot_year)
+        else:
+            st.info(
+                f"No combined CPI and Population data available for {selected_plot_year} for the scatter plot after filtering. Try selecting another year or adjusting filter settings.")
+    else:
+        st.warning(
+            "No sufficient combined CPI and Population data to generate the scatter plot after filtering. This might be due to all data being filtered out as outliers.")
+
+    st.markdown("---")
+
+    # --- Explore Individual Country CPI Data Table ---
+    all_countries_available_for_details = sorted(df_cpi['COUNTRY_NAME'].unique())
+    selected_country_agg_explore = st.selectbox(
+        'Select a Country to view all its CPI data:',
+        all_countries_available_for_details,
+        key="country_cpi_details_select"
+    )
+
+    if selected_country_agg_explore:
+        country_df_agg_explore = df_cpi[
+            df_cpi['COUNTRY_NAME'] == selected_country_agg_explore
+            ].copy()
+        st.write(f"### Detailed CPI Data for {selected_country_agg_explore}")
+        st.dataframe(country_df_agg_explore.round(2), use_container_width=True)

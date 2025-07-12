@@ -29,4 +29,4 @@ print(df_melted.columns)
 df_melted = df_melted.drop(columns=['Capital', 'Continent'])
 print(df_melted.columns)
 
-df_melted.to_csv('world_population_data.csv', index=False)
+#df_melted.to_csv('world_population_data.csv', index=False)

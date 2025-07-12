@@ -2,10 +2,7 @@ import requests
 import pandas as pd
 import xmltodict
 import json
-import plotly.express as px
-import seaborn as sns
-import matplotlib.pyplot as plt
-import os
+
 
 
 def cpi_api_data():
@@ -46,6 +43,10 @@ def cpi_api_data():
     }
 
     print(f"Attempting to fetch data from: {full_url}")
+
+    # Initialize response to None BEFORE the try block
+    response = None
+    xml_data = None # Also initialize xml_data to None for broader scope if parsing fails
 
     try:
         response = requests.get(full_url, headers=headers)
@@ -138,13 +139,16 @@ def cpi_api_data():
             #^artifacts from previous iterations kept just in case.
         else:
             print("\nNo data to create DataFrame. The API might have returned an empty dataset.")
+            return pd.DataFrame() # Return empty DataFrame on no data
 
     except requests.exceptions.RequestException as e:
         print(f"HTTP Request failed: {e}")
         if response is not None:
             print(f"Status Code: {response.status_code}")
             print(f"Response Content: {response.text}")
+        return pd.DataFrame() # Return empty DataFrame on request failure
     except Exception as e:
         print(f"An error occurred: {e}")
-        if 'xml_data' in locals():
+        if xml_data is not None: # Check if xml_data was assigned before trying to use it
             print("Raw XML data that caused the parsing error (truncated):", xml_data.decode('utf-8')[:1000])
+        return pd.DataFrame() # Return empty DataFrame on other errors
