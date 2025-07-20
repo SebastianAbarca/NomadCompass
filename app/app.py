@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import sys
-import util.util as util
+import util as util
 # --- START FIX ---
 # Get the absolute path to the directory containing app.py
 current_app_dir = os.path.dirname(os.path.abspath(__file__))
